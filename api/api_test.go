@@ -38,6 +38,20 @@ func loadFixtures(dbh *db.DBHandle) {
 		"test_feed2": db.Note{Text: "http://testfeed2/feed.atom"},
 		"test_feed3": db.Note{Text: "http://testfeed3/feed.atom"},
 	}
+	todos := map[string]db.Todo{
+		"todo1": db.Todo{
+			Subject: "test todo1",
+			Notes:   "test todo1 notes",
+		},
+		"todo2": db.Todo{
+			Subject: "test todo2",
+			Notes:   "test todo2 notes",
+		},
+		"todo3": db.Todo{
+			Subject: "test todo3",
+			Notes:   "test todo3 notes",
+		},
+	}
 	db_people := make([]*db.Person, len(people))
 	i := 0
 	for _, p := range people {
@@ -55,5 +69,15 @@ func loadFixtures(dbh *db.DBHandle) {
 		if err != nil {
 			glog.Fatal(err.Error())
 		}
+	}
+
+	i = 0
+	for _, t := range todos {
+		t.Person = db_people[i]
+		err := dbh.CreateTodo(&t)
+		if err != nil {
+			glog.Fatal(err.Error())
+		}
+		i++
 	}
 }

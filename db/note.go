@@ -34,4 +34,9 @@ func (dbh *DBHandle) CreateNote(p *Note) error {
 	return nil
 }
 
-func (dbh *DBHandle) UpdateNote(*Note) error { return nil }
+func (dbh *DBHandle) UpdateNote(note *Note) error {
+	if _, err := dbh.ORM.Update(&note); err != nil {
+		return err
+	}
+	return nil
+}

@@ -2,10 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/astaxie/beego/orm"
 	"github.com/codegangsta/martini"
 	"github.com/hobeone/pointyhair/db"
 	"github.com/martini-contrib/render"
@@ -62,10 +64,15 @@ func getTodos(rend render.Render, req *http.Request, dbh *db.DBHandle) {
 			todos[i] = todoWithPersonIdJSON{&todo, todo.Person.Id}
 		}
 	} else {
-		_, err := dbh.ORM.QueryTable("todo").All(&todos)
+		db_todos := []*db.Todo{}
+		_, err := dbh.ORM.QueryTable("todo").All(&db_todos)
 		if err != nil {
 			rend.JSON(500, err.Error())
 			return
+		}
+		todos = make([]todoWithPersonIdJSON, len(db_todos))
+		for i, todo := range db_todos {
+			todos[i] = todoWithPersonIdJSON{todo, todo.Person.Id}
 		}
 	}
 	rend.JSON(http.StatusOK, TodosJSON{Todos: todos})
@@ -79,9 +86,15 @@ func getTodo(rend render.Render, req *http.Request, params martini.Params, dbh *
 	}
 	p := db.Todo{Id: id}
 	err = dbh.ORM.Read(&p)
+
 	if err != nil {
-		rend.JSON(500, err.Error())
-		return
+		if err == orm.ErrNoRows {
+			rend.JSON(404, fmt.Sprintf("No Todo with id %s found.", id))
+			return
+		} else {
+			rend.JSON(500, err.Error())
+			return
+		}
 	}
 
 	rend.JSON(200, TodoJSON{Todo: todoWithPersonIdJSON{&p, p.Person.Id}})
@@ -144,10 +157,14 @@ func updateTodo(rend render.Render, req *http.Request, params martini.Params, db
 	dbtodo := db.Todo{Id: todo_id}
 	err = dbh.ORM.Read(&dbtodo)
 	if err != nil {
-		rend.JSON(404, err.Error())
-		return
+		if err == orm.ErrNoRows {
+			rend.JSON(404, fmt.Sprintf("No Todo with id %s found.", todo_id))
+			return
+		} else {
+			rend.JSON(500, err.Error())
+			return
+		}
 	}
-
 	if u.Todo.Subject != "" {
 		dbtodo.Subject = u.Todo.Subject
 	}
@@ -155,4 +172,5 @@ func updateTodo(rend render.Render, req *http.Request, params martini.Params, db
 		dbtodo.Category = u.Todo.Category
 	}
 	dbh.ORM.Update(&dbtodo)
+	rend.JSON(200, TodoJSON{Todo: todoWithPersonIdJSON{&dbtodo, dbtodo.Person.Id}})
 }

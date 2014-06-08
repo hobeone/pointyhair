@@ -3,22 +3,12 @@ package db
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/astaxie/beego/orm"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/glog"
 	_ "github.com/mattn/go-sqlite3"
 )
-
-type Todo struct {
-	Id       int64     `json:"id"`
-	Subject  string    `json:"subject"`
-	Date     time.Time `json:"date"`
-	Person   *Person   `orm:"rel(fk)"  json:"-"`
-	Category string    `json:"category"`
-	Notes    string    `orm:"type(text)"`
-}
 
 type RecurringTodo struct {
 	Id         int `json:"id"`

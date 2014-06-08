@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/astaxie/beego/orm"
 	"github.com/codegangsta/martini"
 	"github.com/hobeone/pointyhair/db"
 	"github.com/martini-contrib/render"
@@ -12,6 +13,10 @@ import (
 
 type PeopleJSON struct {
 	People []*personWithNotes `json:"people"`
+}
+
+type PersonJSON struct {
+	Person personWithNotes `json:"person"`
 }
 
 type personWithNotes struct {
@@ -27,10 +32,32 @@ func getPerson(rend render.Render, params martini.Params, dbh *db.DBHandle) {
 	}
 	p, err := dbh.GetPersonById(id)
 	if err != nil {
+		if err == orm.ErrNoRows {
+			rend.JSON(404, fmt.Sprintf("No Person with id %s found.", id))
+			return
+		} else {
+			rend.JSON(500, err.Error())
+			return
+		}
+	}
+
+	_, err = dbh.ORM.LoadRelated(p, "Notes")
+	if err != nil {
 		rend.JSON(500, err.Error())
 		return
 	}
-	rend.JSON(200, p)
+	note_ids := make([]int64, len(p.Notes))
+	for ni, n := range p.Notes {
+		note_ids[ni] = n.Id
+	}
+
+	pn := PersonJSON{
+		Person: personWithNotes{
+			*p,
+			note_ids,
+		},
+	}
+	rend.JSON(200, pn)
 }
 
 func getPeople(rend render.Render, req *http.Request, dbh *db.DBHandle) {
@@ -52,8 +79,13 @@ func getPeople(rend render.Render, req *http.Request, dbh *db.DBHandle) {
 		for i, pid := range people_ids {
 			person, err := dbh.GetPersonById(pid)
 			if err != nil {
-				rend.JSON(404, fmt.Sprintf("Person with ID %d doesn't exist", pid))
-				return
+				if err == orm.ErrNoRows {
+					rend.JSON(404, fmt.Sprintf("Person with ID %d doesn't exist", pid))
+					return
+				} else {
+					rend.JSON(500, err.Error())
+					return
+				}
 			}
 			_, err = dbh.ORM.LoadRelated(person, "Notes")
 			if err != nil {
