@@ -64,7 +64,7 @@ func send200() int {
 
 func RunWebUi(dbh *db.DBHandle) {
 	m := createMartini(dbh)
-	glog.Fatal(http.ListenAndServe(":3000", m))
+	glog.Fatal(http.ListenAndServe(":3001", m))
 }
 
 func parseParamIds(str_ids []string) ([]int64, error) {

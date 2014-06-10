@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	dbh, err := db.NewDBHandle("file:test.sql", true)
+	dbh, err := db.NewDBHandle("test.sql", true)
 	if err != nil {
 		glog.Fatal(err)
 	}

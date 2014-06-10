@@ -12,16 +12,17 @@ import (
 )
 
 type PeopleJSON struct {
-	People []*personWithNotes `json:"people"`
+	People []*personWithRelations `json:"people"`
 }
 
 type PersonJSON struct {
-	Person personWithNotes `json:"person"`
+	Person personWithRelations `json:"person"`
 }
 
-type personWithNotes struct {
+type personWithRelations struct {
 	db.Person
 	NoteIds []int64 `json:"notes"`
+	TodoIds []int64 `json:"todos"`
 }
 
 func getPerson(rend render.Render, params martini.Params, dbh *db.DBHandle) {
@@ -41,23 +42,34 @@ func getPerson(rend render.Render, params martini.Params, dbh *db.DBHandle) {
 		}
 	}
 
-	_, err = dbh.ORM.LoadRelated(p, "Notes")
+	pn, err := newPersonWithRelations(p, dbh)
 	if err != nil {
-		rend.JSON(500, err.Error())
+		rend.JSON(500, err)
 		return
+	}
+	rend.JSON(200, PersonJSON{Person: pn})
+}
+
+func newPersonWithRelations(p *db.Person, dbh *db.DBHandle) (personWithRelations, error) {
+	err := p.LoadRelated(dbh)
+	if err != nil {
+		return personWithRelations{}, err
 	}
 	note_ids := make([]int64, len(p.Notes))
 	for ni, n := range p.Notes {
 		note_ids[ni] = n.Id
 	}
-
-	pn := PersonJSON{
-		Person: personWithNotes{
-			*p,
-			note_ids,
-		},
+	todo_ids := make([]int64, len(p.Todos))
+	for ti, t := range p.Todos {
+		todo_ids[ti] = t.Id
 	}
-	rend.JSON(200, pn)
+
+	pn := personWithRelations{
+		*p,
+		note_ids,
+		todo_ids,
+	}
+	return pn, nil
 }
 
 func getPeople(rend render.Render, req *http.Request, dbh *db.DBHandle) {
@@ -67,7 +79,7 @@ func getPeople(rend render.Render, req *http.Request, dbh *db.DBHandle) {
 		return
 	}
 
-	var people_json []*personWithNotes
+	var people_json []*personWithRelations
 	param_ids := req.Form["ids[]"]
 	if len(param_ids) > 0 {
 		people_ids, err := parseParamIds(param_ids)
@@ -75,7 +87,7 @@ func getPeople(rend render.Render, req *http.Request, dbh *db.DBHandle) {
 			rend.JSON(500, err.Error())
 			return
 		}
-		people_json = make([]*personWithNotes, len(people_ids))
+		people_json = make([]*personWithRelations, len(people_ids))
 		for i, pid := range people_ids {
 			person, err := dbh.GetPersonById(pid)
 			if err != nil {
@@ -87,17 +99,13 @@ func getPeople(rend render.Render, req *http.Request, dbh *db.DBHandle) {
 					return
 				}
 			}
-			_, err = dbh.ORM.LoadRelated(person, "Notes")
+			pn, err := newPersonWithRelations(person, dbh)
 			if err != nil {
-				rend.JSON(500, err.Error())
+				rend.JSON(500, err)
 				return
 			}
-			note_ids := make([]int64, len(person.Notes))
-			for ni, n := range person.Notes {
-				note_ids[ni] = n.Id
-			}
 
-			people_json[i] = &personWithNotes{*person, note_ids}
+			people_json[i] = &pn
 		}
 	} else {
 		people, err := dbh.GetPeopleById([]int64{})
@@ -106,18 +114,14 @@ func getPeople(rend render.Render, req *http.Request, dbh *db.DBHandle) {
 			return
 		}
 
-		people_json = make([]*personWithNotes, len(people))
+		people_json = make([]*personWithRelations, len(people))
 		for i, p := range people {
-			_, err = dbh.ORM.LoadRelated(p, "Notes")
+			pn, err := newPersonWithRelations(p, dbh)
 			if err != nil {
-				rend.JSON(500, err.Error())
+				rend.JSON(500, err)
 				return
 			}
-			note_ids := make([]int64, len(p.Notes))
-			for ni, n := range p.Notes {
-				note_ids[ni] = n.Id
-			}
-			people_json[i] = &personWithNotes{*p, note_ids}
+			people_json[i] = &pn
 		}
 	}
 	rend.JSON(200, PeopleJSON{People: people_json})

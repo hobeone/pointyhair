@@ -4,7 +4,19 @@ type Person struct {
 	Id    int64   `json:"id"`
 	Name  string  `orm:"size(255);unique" json:"name"`
 	Notes []*Note `orm:"reverse(many)" json:"-"`
-	Todo  []*Todo `orm:"reverse(many)" json:"-"`
+	Todos []*Todo `orm:"reverse(many)" json:"-"`
+}
+
+func (p *Person) LoadRelated(dbh *DBHandle) error {
+	if _, err := dbh.ORM.LoadRelated(p, "Notes"); err != nil {
+		return err
+	}
+
+	if _, err := dbh.ORM.LoadRelated(p, "Todos"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Returns all people if ids arguement is empty
