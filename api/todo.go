@@ -30,7 +30,7 @@ type TodosJSON struct {
 
 type unmarshalTodoJSON struct {
 	Id       int       `json:"id"`
-	Subject  string    `json:"subject"`
+	Text     string    `json:"text"`
 	Category string    `json:"category"`
 	Date     time.Time `json:"date"`
 	PersonId int64     `json:"person"`
@@ -118,7 +118,7 @@ func createTodo(rend render.Render, req *http.Request, params martini.Params, db
 
 	queryParams, _ := url.ParseQuery(req.URL.RawQuery)
 	dbtodo := db.Todo{
-		Subject:  u.Subject,
+		Text:     u.Text,
 		Category: u.Category,
 		Date:     u.Date,
 	}
@@ -180,8 +180,8 @@ func updateTodo(rend render.Render, req *http.Request, params martini.Params, db
 			return
 		}
 	}
-	if u.Todo.Subject != "" {
-		dbtodo.Subject = u.Todo.Subject
+	if u.Todo.Text != "" {
+		dbtodo.Text = u.Todo.Text
 	}
 	if u.Todo.Category != "" {
 		dbtodo.Category = u.Todo.Category
