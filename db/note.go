@@ -35,7 +35,14 @@ func (dbh *DBHandle) CreateNote(p *Note) error {
 }
 
 func (dbh *DBHandle) UpdateNote(note *Note) error {
-	if _, err := dbh.ORM.Update(&note); err != nil {
+	if _, err := dbh.ORM.Update(note); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (dbh *DBHandle) RemoveNote(note *Note) error {
+	if _, err := dbh.ORM.Delete(note); err != nil {
 		return err
 	}
 	return nil

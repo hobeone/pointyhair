@@ -1,12 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/astaxie/beego/orm"
 	"github.com/codegangsta/martini"
+	"github.com/golang/glog"
 	"github.com/hobeone/pointyhair/db"
 	"github.com/martini-contrib/render"
 )
@@ -21,8 +23,14 @@ type PersonJSON struct {
 
 type personWithRelations struct {
 	db.Person
-	NoteIds []int64 `json:"notes"`
-	TodoIds []int64 `json:"todos"`
+	Notes []*db.Note `json:"notes"`
+	Todos []*db.Todo `json:"todos"`
+	//	NoteIds []int64 `json:"notes"`
+	//	TodoIds []int64 `json:"todos"`
+}
+
+type unmarshalPersonJSON struct {
+	Name string `json:"name"`
 }
 
 func getPerson(rend render.Render, params martini.Params, dbh *db.DBHandle) {
@@ -34,7 +42,7 @@ func getPerson(rend render.Render, params martini.Params, dbh *db.DBHandle) {
 	p, err := dbh.GetPersonById(id)
 	if err != nil {
 		if err == orm.ErrNoRows {
-			rend.JSON(404, fmt.Sprintf("No Person with id %s found.", id))
+			rend.JSON(404, fmt.Sprintf("No Person with id %d found.", id))
 			return
 		} else {
 			rend.JSON(500, err.Error())
@@ -47,7 +55,7 @@ func getPerson(rend render.Render, params martini.Params, dbh *db.DBHandle) {
 		rend.JSON(500, err)
 		return
 	}
-	rend.JSON(200, PersonJSON{Person: pn})
+	rend.JSON(200, pn)
 }
 
 func newPersonWithRelations(p *db.Person, dbh *db.DBHandle) (personWithRelations, error) {
@@ -66,8 +74,8 @@ func newPersonWithRelations(p *db.Person, dbh *db.DBHandle) (personWithRelations
 
 	pn := personWithRelations{
 		*p,
-		note_ids,
-		todo_ids,
+		p.Notes,
+		p.Todos,
 	}
 	return pn, nil
 }
@@ -124,5 +132,37 @@ func getPeople(rend render.Render, req *http.Request, dbh *db.DBHandle) {
 			people_json[i] = &pn
 		}
 	}
-	rend.JSON(200, PeopleJSON{People: people_json})
+	rend.JSON(200, people_json)
+}
+
+func createPerson(rend render.Render, req *http.Request, params martini.Params, dbh *db.DBHandle) {
+	err := req.ParseForm()
+	if err != nil {
+		rend.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	u := unmarshalPersonJSON{}
+	glog.Info("Decoding person creation request")
+	err = json.NewDecoder(req.Body).Decode(&u)
+	if err != nil {
+		rend.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	dbPerson := db.Person{
+		Name: u.Name,
+	}
+
+	_, err = dbh.ORM.Insert(&dbPerson)
+	if err != nil {
+		rend.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	pn, err := newPersonWithRelations(&dbPerson, dbh)
+	if err != nil {
+		rend.JSON(500, err)
+		return
+	}
+	rend.JSON(http.StatusOK, pn)
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -40,36 +41,57 @@ type unmarshalNoteJSONContainer struct {
 func createNote(rend render.Render, req *http.Request, params martini.Params, dbh *db.DBHandle) {
 	err := req.ParseForm()
 	if err != nil {
-		rend.JSON(500, err.Error())
+		rend.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-	u := unmarshalNoteJSONContainer{}
+	u := unmarshalNoteJSON{}
 	err = json.NewDecoder(req.Body).Decode(&u)
 	if err != nil {
-		rend.JSON(500, err.Error())
+		rend.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
 
-	p := db.Person{Id: u.Note.PersonId}
+	p := db.Person{Id: u.PersonId}
 	err = dbh.ORM.Read(&p)
 	if err != nil {
-		rend.JSON(500, "Unknown Person ID")
+		rend.JSON(http.StatusInternalServerError, fmt.Sprintf("Unknown Person ID: %d", u.PersonId))
 		return
 	}
 
 	dbnote := db.Note{
-		Text:     u.Note.Text,
-		Category: u.Note.Category,
-		Date:     u.Note.Date,
+		Text:     u.Text,
+		Category: u.Category,
+		Date:     u.Date,
 		Person:   &p,
 	}
 	err = dbh.CreateNote(&dbnote)
 	if err != nil {
-		rend.JSON(500, err.Error())
+		rend.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	rend.JSON(200, NoteJSON{Note: noteWithPersonIdJSON{&dbnote, p.Id}})
+	rend.JSON(200, noteWithPersonIdJSON{&dbnote, p.Id})
+}
 
+func deleteNote(rend render.Render, params martini.Params, dbh *db.DBHandle) {
+	note_id, err := strconv.ParseInt(params["id"], 10, 64)
+	if err != nil {
+		rend.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	note, err := dbh.GetNoteById(note_id)
+	if err != nil {
+		rend.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	err = dbh.RemoveNote(note)
+	if err != nil {
+		rend.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	rend.JSON(http.StatusNoContent, "")
 }
 
 func updateNote(rend render.Render, req *http.Request, params martini.Params, dbh *db.DBHandle) {
@@ -120,7 +142,7 @@ func getNote(rend render.Render, req *http.Request, params martini.Params, dbh *
 		return
 	}
 
-	rend.JSON(200, NoteJSON{Note: noteWithPersonIdJSON{n, n.Person.Id}})
+	rend.JSON(200, noteWithPersonIdJSON{n, n.Person.Id})
 }
 
 func getNotes(rend render.Render, req *http.Request, dbh *db.DBHandle) {
@@ -159,5 +181,5 @@ func getNotes(rend render.Render, req *http.Request, dbh *db.DBHandle) {
 			return
 		}
 	}
-	rend.JSON(http.StatusOK, NotesJSON{Notes: notes})
+	rend.JSON(http.StatusOK, notes)
 }

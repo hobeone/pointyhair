@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
 	"github.com/astaxie/beego/orm"
 	"github.com/codegangsta/martini"
+	"github.com/golang/glog"
 	"github.com/hobeone/pointyhair/db"
 	"github.com/martini-contrib/render"
 )
@@ -75,13 +77,13 @@ func getTodos(rend render.Render, req *http.Request, dbh *db.DBHandle) {
 			todos[i] = todoWithPersonIdJSON{todo, todo.Person.Id}
 		}
 	}
-	rend.JSON(http.StatusOK, TodosJSON{Todos: todos})
+	rend.JSON(http.StatusOK, todos)
 }
 
 func getTodo(rend render.Render, req *http.Request, params martini.Params, dbh *db.DBHandle) {
 	id, err := strconv.ParseInt(params["id"], 10, 64)
 	if err != nil {
-		rend.JSON(500, "Invalid id: "+err.Error())
+		rend.JSON(500, fmt.Sprintf("Invalid id %s: %s", params["id"], err.Error()))
 		return
 	}
 	p := db.Todo{Id: id}
@@ -89,7 +91,7 @@ func getTodo(rend render.Render, req *http.Request, params martini.Params, dbh *
 
 	if err != nil {
 		if err == orm.ErrNoRows {
-			rend.JSON(404, fmt.Sprintf("No Todo with id %s found.", id))
+			rend.JSON(404, fmt.Sprintf("No Todo with id %d found.", id))
 			return
 		} else {
 			rend.JSON(500, err.Error())
@@ -97,7 +99,7 @@ func getTodo(rend render.Render, req *http.Request, params martini.Params, dbh *
 		}
 	}
 
-	rend.JSON(200, TodoJSON{Todo: todoWithPersonIdJSON{&p, p.Person.Id}})
+	rend.JSON(200, todoWithPersonIdJSON{&p, p.Person.Id})
 }
 
 func createTodo(rend render.Render, req *http.Request, params martini.Params, dbh *db.DBHandle) {
@@ -106,32 +108,45 @@ func createTodo(rend render.Render, req *http.Request, params martini.Params, db
 		rend.JSON(500, err.Error())
 		return
 	}
-	u := unmarshalTodoJSONContainer{}
+	u := unmarshalTodoJSON{}
+	glog.Info("Decoded json: %+v", u)
 	err = json.NewDecoder(req.Body).Decode(&u)
 	if err != nil {
 		rend.JSON(500, err.Error())
 		return
 	}
 
-	p := db.Person{Id: u.Todo.PersonId}
-	err = dbh.ORM.Read(&p)
-	if err != nil {
-		rend.JSON(500, "Unknown Person ID")
-		return
+	queryParams, _ := url.ParseQuery(req.URL.RawQuery)
+	dbtodo := db.Todo{
+		Subject:  u.Subject,
+		Category: u.Category,
+		Date:     u.Date,
 	}
 
-	dbtodo := db.Todo{
-		Subject:  u.Todo.Subject,
-		Category: u.Todo.Category,
-		Date:     u.Todo.Date,
-		Person:   &p,
+	if _, ok := queryParams["addToAll"]; ok {
+		glog.Info(u)
+		//do something here
+		err = dbh.AddTodoToAllPeople(&dbtodo)
+		if err != nil {
+			rend.JSON(http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else {
+		p := db.Person{Id: u.PersonId}
+		err = dbh.ORM.Read(&p)
+		if err != nil {
+			rend.JSON(500, fmt.Sprintf("Unknown Person id: %d", u.PersonId))
+			return
+		}
+
+		dbtodo.Person = &p
+		_, err = dbh.ORM.Insert(&dbtodo)
+		if err != nil {
+			rend.JSON(500, err.Error())
+			return
+		}
+		rend.JSON(200, todoWithPersonIdJSON{&dbtodo, p.Id})
 	}
-	_, err = dbh.ORM.Insert(&dbtodo)
-	if err != nil {
-		rend.JSON(500, err.Error())
-		return
-	}
-	rend.JSON(200, TodoJSON{Todo: todoWithPersonIdJSON{&dbtodo, p.Id}})
 }
 
 func updateTodo(rend render.Render, req *http.Request, params martini.Params, dbh *db.DBHandle) {
@@ -158,7 +173,7 @@ func updateTodo(rend render.Render, req *http.Request, params martini.Params, db
 	err = dbh.ORM.Read(&dbtodo)
 	if err != nil {
 		if err == orm.ErrNoRows {
-			rend.JSON(404, fmt.Sprintf("No Todo with id %s found.", todo_id))
+			rend.JSON(404, fmt.Sprintf("No Todo with id %d found.", todo_id))
 			return
 		} else {
 			rend.JSON(500, err.Error())
@@ -172,5 +187,27 @@ func updateTodo(rend render.Render, req *http.Request, params martini.Params, db
 		dbtodo.Category = u.Todo.Category
 	}
 	dbh.ORM.Update(&dbtodo)
-	rend.JSON(200, TodoJSON{Todo: todoWithPersonIdJSON{&dbtodo, dbtodo.Person.Id}})
+	rend.JSON(200, todoWithPersonIdJSON{&dbtodo, dbtodo.Person.Id})
+}
+
+func deleteTodo(rend render.Render, params martini.Params, dbh *db.DBHandle) {
+	todo_id, err := strconv.ParseInt(params["id"], 10, 64)
+	if err != nil {
+		rend.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	todo, err := dbh.GetTodoById(todo_id)
+	if err != nil {
+		rend.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+
+	err = dbh.RemoveTodo(todo)
+	if err != nil {
+		rend.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	rend.JSON(http.StatusNoContent, "")
 }

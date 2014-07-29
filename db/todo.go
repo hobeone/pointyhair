@@ -2,13 +2,13 @@ package db
 
 import "time"
 
+// Proably a better way of dealing with this.
 type Todo struct {
 	Id       int64     `json:"id"`
-	Subject  string    `json:"subject"`
 	Date     time.Time `json:"date"`
 	Person   *Person   `orm:"rel(fk)"  json:"-"`
+	Text     string    `orm:"type(text)" json:"text"`
 	Category string    `json:"category"`
-	Notes    string    `orm:"type(text)"`
 }
 
 func (dbh *DBHandle) GetTodoById(id int64) (*Todo, error) {
@@ -44,5 +44,27 @@ func (dbh *DBHandle) UpdateTodo(t *Todo) error {
 		return err
 	}
 	return nil
+}
 
+func (dbh *DBHandle) RemoveTodo(t *Todo) error {
+	if _, err := dbh.ORM.Delete(t); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (dbh *DBHandle) AddTodoToAllPeople(t *Todo) error {
+	var people []*Person
+	_, err := dbh.ORM.QueryTable("person").All(&people)
+	if err != nil {
+		return err
+	}
+	for _, p := range people {
+		t.Person = p
+		err = dbh.CreateTodo(t)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

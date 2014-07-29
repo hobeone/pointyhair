@@ -34,12 +34,16 @@ func createMartini(dbh *db.DBHandle) *martini.Martini {
 	m.Map(dbh)
 
 	r := martini.NewRouter()
+	r.Options("/api/1/people", send200)
 	r.Get("/api/1/people", getPeople)
 	r.Get("/api/1/people/:id", getPerson)
+	r.Post("/api/1/people", createPerson)
 
 	r.Get("/api/1/notes", getNotes)
 	r.Options("/api/1/notes", send200)
 	r.Post("/api/1/notes", createNote)
+	r.Delete("/api/1/notes/:id", deleteNote)
+	r.Options("/api/1/notes/:id", send200)
 
 	r.Get("/api/1/notes/:id", getNote)
 	r.Options("/api/1/notes/:id", send200)
@@ -52,6 +56,7 @@ func createMartini(dbh *db.DBHandle) *martini.Martini {
 	r.Options("/api/1/todos", send200)
 	r.Put("/api/1/todos/:id", updateTodo)
 	r.Options("/api/1/todos/:id", send200)
+	r.Delete("/api/1/todos/:id", deleteTodo)
 
 	m.Action(r.Handle)
 
